@@ -1,0 +1,6 @@
+{
+  "appId": "com.khawadawa.app",
+  "appName": "Khawa Dawa",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
