@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Khawa Dawa - Food Delivery</title>
+    <!-- Google Fonts (Poppins), Font Awesome 6.1.1 & Leaflet.js 1.7.1 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.1.1/css/all.min.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.7.1/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.7.1/dist/leaflet.js"></script>
+<script src="https://unpkg.com/@capacitor/core@latest/dist/capacitor.js"></script>
+<script src="https://unpkg.com/@capacitor/geolocation@latest/dist/plugin.js"></script>
+
+    <style>
+        :root {
+            --primary: #ff4757;
+            --primary-light: #ff6b81;
+            --primary-soft: #ffe3e6;
+            --dark: #2f3542;
+            --gray: #f1f2f6;
+            --text-dark: #2f3542;
+            --text-muted: #747d8c;
+            --success: #2ed573;
+            --warning: #ffa502;
+            --white: #ffffff;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Poppins', sans-serif; }
+        body { background-color: #e4e4e4; display: flex; justify-content: center; }
+
+        /* Mobile App Wrapper */
+        .app-container { width: 100%; max-width: 480px; height: 100vh; background: var(--white); position: relative; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 0 20px rgba(0,0,0,0.2); }
+
+        /* SPLASH / LOADING SCREEN */
+        #splash-screen {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--white); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 9999;
+        }
+        .spinner { width: 50px; height: 50px; border: 5px solid var(--gray); border-top: 5px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        #splash-screen h2 { color: var(--primary); font-size: 24px; }
+
+        /* Generic Styles */
+        .btn { padding: 12px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; width: 100%; font-size: 16px; text-align: center; transition: 0.2s; }
+        .btn:active { transform: scale(0.98); }
+        .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-primary { background: var(--primary); color: var(--white); }
+        .btn-secondary { background: #a4b0be; color: var(--white); }
+        .btn-outline { background: transparent; border: 2px solid var(--primary); color: var(--primary); }
+        .form-control { width: 100%; padding: 12px; margin-bottom: 15px; border: 1px solid #ced4da; border-radius: 8px; font-size: 14px; outline: none; }
+        .form-control:focus { border-color: var(--primary); }
+        
+        .header { background: var(--white); padding: 15px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .header h2 { color: var(--primary); font-size: 20px; }
+
+        /* Views */
+        .view { display: none; flex: 1; overflow-y: auto; padding-bottom: 70px; background: #fafafa; }
+        .view.active { display: block; }
+        .section-title { padding: 15px 20px 5px; font-size: 18px; color: var(--dark); font-weight: bold; }
+
+        /* Auth View */
+        #auth-view { padding: 30px 20px; background: var(--white); height: 100%; }
+        .auth-logo { font-size: 40px; color: var(--primary); text-align: center; margin-bottom: 10px; }
+        .auth-title { text-align: center; margin-bottom: 30px; color: var(--dark); }
+        .toggle-auth { text-align: center; margin-top: 15px; color: var(--primary); cursor: pointer; font-weight: 600; font-size: 14px; }
+        .error-msg { color: var(--primary); text-align: center; margin-top: 10px; display: none; font-size: 14px; }
+        .forgot-link { display: block; text-align: right; margin: -8px 0 15px; font-size: 13px; color: var(--primary); cursor: pointer; background: none; border: none; width: 100%; font-weight: 500; }
+        .forgot-link:hover { text-decoration: underline; }
+
+        /* Forgot Password Modal */
+        .modal-overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 10000; padding: 20px; }
+        .modal-overlay.show { display: flex; }
+        .modal-box { background: var(--white); padding: 25px; border-radius: 12px; width: 100%; box-shadow: 0 4px 20px rgba(0,0,0,0.3); }
+        .modal-box h3 { color: var(--primary); margin-bottom: 8px; }
+        .modal-desc { font-size: 14px; color: var(--text-muted); margin-bottom: 15px; }
+        .modal-actions { display: flex; gap: 10px; }
+        .modal-msg { margin-top: 12px; font-size: 14px; text-align: center; display: none; }
+        .modal-msg.error { color: var(--primary); display: block; }
+        .modal-msg.success { color: #1e9e52; display: block; }
+
+        /* Toast */
+        #toast { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); padding: 12px 18px; border-radius: 8px; color: #fff; font-weight: bold; font-size: 14px; z-index: 10001; display: none; width: 90%; text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.25); }
+        #toast.success { background: var(--success); }
+        #toast.error { background: var(--primary); }
+
+        /* Sliders & Rest List */
+        .slider-container { display: flex; overflow-x: auto; padding: 10px 20px; gap: 15px; scroll-snap-type: x mandatory; }
+        .slider-container::-webkit-scrollbar { display: none; }
+        .food-card { min-width: 160px; background: var(--white); border-radius: 12px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.08); scroll-snap-align: start; cursor: pointer; transition: 0.2s; border: 1px solid #eee; }
+        .food-card:active { transform: scale(0.96); }
+        .food-card img { width: 100%; height: 100px; object-fit: cover; }
+        .food-info { padding: 10px; }
+        .food-info h4 { font-size: 14px; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-dark); }
+        .food-info .price { color: var(--primary); font-weight: bold; }
+        
+        .rest-list { padding: 10px 20px; }
+        .rest-card { background: var(--white); border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; border: 1px solid #eee; }
+        .rest-card:active { transform: scale(0.98); }
+        .rest-logo-thumb { width: 55px; height: 55px; border-radius: 50%; object-fit: cover; border: 1px solid #ddd; background: var(--gray); display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 20px; flex-shrink: 0; }
+
+        /* ===== RESTAURANT DETAILS PAGE ===== */
+        #restaurant-view { padding-bottom: 80px; }
+        .rest-topbar { position: sticky; top: 0; z-index: 20; background: var(--white); box-shadow: 0 2px 6px rgba(0,0,0,0.06); }
+        .rt-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px 8px; }
+        .back-btn { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--primary); color: #fff; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .back-btn:active { transform: scale(0.94); }
+        .rt-brand { display: flex; align-items: center; gap: 8px; color: var(--primary); font-weight: 700; font-size: 20px; letter-spacing: 0.2px; }
+        .rt-spacer { width: 38px; flex-shrink: 0; }
+
+        .cat-bar { display: flex; gap: 8px; overflow-x: auto; padding: 4px 16px 12px; scrollbar-width: none; }
+        .cat-bar::-webkit-scrollbar { display: none; }
+        .cat-pill { white-space: nowrap; padding: 7px 16px; border-radius: 20px; border: 1px solid #e3e5ea; background: var(--white); color: var(--text-muted); font-size: 13px; font-weight: 500; cursor: pointer; }
+        .cat-pill.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+
+        .rest-hero { background: var(--primary-soft); padding: 16px; display: flex; gap: 14px; align-items: flex-start; }
+        .rest-logo { width: 68px; height: 68px; border-radius: 50%; background: #fff; border: 2px solid #fff; display: flex; align-items: center; justify-content: center; color: var(--primary); font-size: 26px; overflow: hidden; flex-shrink: 0; }
+        .rest-logo img { width: 100%; height: 100%; object-fit: cover; }
+        .rest-meta { flex: 1; min-width: 0; }
+        .rest-meta h3 { font-size: 18px; color: var(--dark); line-height: 1.25; }
+        .rest-addr { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+        .map-toggle { margin-top: 8px; background: none; border: none; color: var(--primary); font-size: 13px; font-weight: 600; cursor: pointer; padding: 0; }
+        .rest-actions { display: flex; flex-direction: column; gap: 8px; }
+        .icon-box { width: 36px; height: 36px; border-radius: 10px; border: none; background: #ffc9cf; color: var(--primary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .icon-box.active { background: var(--primary); color: #fff; }
+
+        #rest-map-wrap { display: none; margin: 12px 16px 0; border-radius: 14px; overflow: hidden; border: 1px solid #eee; background: #fff; }
+        #rest-map { height: 190px; width: 100%; }
+        .map-empty { padding: 18px; font-size: 13px; color: var(--text-muted); text-align: center; }
+
+        .quick-info { display: flex; background: var(--white); margin: 12px 16px 0; border-radius: 14px; border: 1px solid #eee; }
+        .qi-col { flex: 1; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 12px 8px; cursor: default; }
+        .qi-col + .qi-col { border-left: 1px solid #eee; cursor: pointer; }
+        .qi-col > i { font-size: 20px; }
+        .qi-col .fa-star { color: var(--warning); }
+        .qi-col .fa-location-dot { color: var(--primary); }
+        .qi-text strong { display: block; font-size: 14px; color: var(--dark); line-height: 1.2; }
+        .qi-text span { font-size: 11.5px; color: var(--text-muted); }
+
+        .search-row { display: flex; gap: 10px; padding: 14px 16px 0; }
+        .search-box { flex: 1; display: flex; align-items: center; gap: 10px; background: var(--white); border: 1px solid #e3e5ea; border-radius: 12px; padding: 0 14px; }
+        .search-box i { color: var(--text-muted); font-size: 14px; }
+        .search-box input { flex: 1; border: none; outline: none; background: transparent; padding: 11px 0; font-size: 14px; }
+        .filter-btn { width: 44px; border-radius: 12px; border: 1px solid #e3e5ea; background: var(--white); color: var(--dark); font-size: 15px; cursor: pointer; }
+        .filter-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+
+        .filter-panel { display: none; margin: 10px 16px 0; padding: 12px; background: var(--white); border: 1px solid #eee; border-radius: 12px; }
+        .filter-panel.show { display: block; }
+        .filter-panel p { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }
+        .chip-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        .chip-row:last-child { margin-bottom: 0; }
+        .chip { padding: 6px 14px; border-radius: 16px; border: 1px solid #e3e5ea; background: #fff; font-size: 12.5px; cursor: pointer; color: var(--dark); }
+        .chip.active { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+
+        .p-card { display: flex; gap: 12px; margin: 12px 16px 0; padding: 10px; background: var(--white); border: 1px solid #eee; border-radius: 16px; }
+        .p-img { position: relative; width: 92px; height: 92px; flex-shrink: 0; }
+        .p-img img { width: 100%; height: 100%; object-fit: cover; border-radius: 12px; background: var(--gray); }
+        .wish-btn { position: absolute; top: 5px; left: 5px; width: 26px; height: 26px; border-radius: 50%; border: none; background: rgba(255,255,255,0.92); color: var(--text-muted); font-size: 12px; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+        .wish-btn.active { color: var(--primary); }
+        .p-info { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+        .p-info h4 { font-size: 15px; color: var(--dark); line-height: 1.3; }
+        .p-desc { font-size: 12px; color: var(--text-muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .p-row { display: flex; align-items: center; gap: 8px; }
+        .diet { width: 16px; height: 16px; border: 1.5px solid; border-radius: 3px; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .diet::after { content: ''; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+        .diet.veg { color: #1e9e52; }
+        .diet.nonveg { color: #d63031; }
+        .diet-label { font-size: 11.5px; color: var(--text-muted); }
+        .p-price { color: var(--primary); font-weight: 700; font-size: 16px; }
+        .p-add { width: 38px; height: 38px; border-radius: 50%; border: none; background: var(--primary); color: #fff; font-size: 16px; cursor: pointer; align-self: center; flex-shrink: 0; }
+        .p-add:active { transform: scale(0.92); }
+        .p-empty { text-align: center; padding: 30px 20px; color: var(--text-muted); font-size: 14px; }
+
+        /* Cart & Checkout */
+        .cart-item { display: flex; justify-content: space-between; padding: 15px 20px; background: var(--white); border-bottom: 1px solid var(--gray); }
+        .cart-summary { padding: 20px; background: var(--white); margin-top: 10px; }
+        .bill-row { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 14px; color: var(--text-muted); }
+        .bill-total { display: flex; justify-content: space-between; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #ccc; font-weight: bold; font-size: 18px; color: var(--dark); }
+        .loc-btn { background: #3742fa; color: #fff; padding: 12px; border: none; border-radius: 8px; width: 100%; margin-bottom: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; font-weight: 600; }
+        .loc-btn:active { transform: scale(0.98); }
+
+        /* Orders & Chat */
+        .order-card { background: var(--white); margin: 10px 20px; padding: 15px; border-radius: 12px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .badge { padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: bold; color: #fff; }
+        .badge.placed { background: #7bed9f; color: #2f3542; }
+        .badge.active { background: var(--primary); }
+        .badge.delivered { background: var(--success); }
+        .track-btn { width: 100%; margin-top: 10px; padding: 8px; border-radius: 6px; background: var(--dark); color: #fff; border: none; cursor: pointer; font-weight: 600; }
+
+        #chat-messages { height: 300px; overflow-y: auto; padding: 15px; background: #fafafa; display: flex; flex-direction: column; gap: 10px; }
+        .msg { padding: 10px 15px; border-radius: 15px; max-width: 80%; font-size: 14px; }
+        .msg.me { background: var(--primary); color: #fff; align-self: flex-end; border-bottom-right-radius: 2px; }
+        .msg.other { background: #e0e0e0; color: var(--dark); align-self: flex-start; border-bottom-left-radius: 2px; }
+
+        /* Bottom Navigation */
+        .bottom-nav { position: absolute; bottom: 0; width: 100%; background: var(--white); display: flex; justify-content: space-around; padding: 10px 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); z-index: 100; }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: var(--text-muted); cursor: pointer; font-size: 12px; position: relative; }
+        .nav-item.active { color: var(--primary); }
+        .cart-badge { position: absolute; top: -5px; right: -5px; background: var(--primary); color: white; border-radius: 50%; padding: 2px 6px; font-size: 10px; font-weight: bold; display: none; }
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+
+    <!-- Toast Notification -->
+    <div id="toast"></div>
+
+    <!-- Splash / Loading Screen -->
+    <div id="splash-screen">
+        <div class="spinner"></div>
+        <h2><i class="fa-solid fa-utensils"></i> Khawa Dawa</h2>
+        <p style="color: var(--text-muted); margin-top: 10px;">Loading your cravings...</p>
+    </div>
+
+    <!-- Header -->
+    <div class="header" id="app-header" style="display: none;">
+        <h2>Khawa Dawa</h2>
+        <i class="fa-solid fa-bell" style="color: var(--text-muted);"></i>
+    </div>
+
+    <!-- Auth View -->
+    <div id="auth-view" class="view">
+        <div class="auth-logo"><i class="fa-solid fa-utensils"></i></div>
+        <h2 class="auth-title">Khawa Dawa</h2>
+
+        <div id="login-form">
+            <input type="email" id="login-email" class="form-control" placeholder="Email Address">
+            <input type="password" id="login-password" class="form-control" placeholder="Password">
+            <button type="button" class="forgot-link" id="forgot-password-link">Forgot Password?</button>
+            <button class="btn btn-primary" id="btn-login">Login</button>
+            <p class="error-msg" id="login-error"></p>
+            <p class="toggle-auth" id="btn-to-signup">New here? Create an Account</p>
+        </div>
+
+        <div id="signup-form" style="display: none;">
+            <input type="text" id="signup-name" class="form-control" placeholder="Full Name">
+            <input type="email" id="signup-email" class="form-control" placeholder="Email Address">
+            <input type="tel" id="signup-phone" class="form-control" placeholder="Phone Number">
+            <input type="password" id="signup-password" class="form-control" placeholder="Password">
+            <button class="btn btn-primary" id="btn-signup">Sign Up</button>
+            <p class="error-msg" id="signup-error"></p>
+            <p class="toggle-auth" id="btn-to-login">Already have an account? Login</p>
+        </div>
+    </div>
+
+    <!-- Forgot Password Modal -->
+    <div class="modal-overlay" id="forgot-modal">
+        <div class="modal-box">
+            <h3>Reset Password</h3>
+            <p class="modal-desc">Enter your registered email address and we'll send you a link to reset your password.</p>
+            <input type="email" id="reset-email" class="form-control" placeholder="Registered Email">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" id="reset-cancel-btn">Cancel</button>
+                <button class="btn btn-primary" id="reset-send-btn">Send Reset Link</button>
+            </div>
+            <p class="modal-msg" id="reset-msg"></p>
+        </div>
+    </div>
+
+    <!-- Home View -->
+    <div id="home-view" class="view">
+        <div class="section-title">Recommend Food 🔥</div>
+        <div class="slider-container" id="slider-recommended"></div>
+
+        <div class="section-title">Best Rated Food ⭐</div>
+        <div class="slider-container" id="slider-toprated"></div>
+
+        <div class="section-title">All Restaurants 🍽️</div>
+        <div class="rest-list" id="restaurant-list"></div>
+    </div>
+
+    <!-- ===== Restaurant Details / Food Cart Page ===== -->
+    <div id="restaurant-view" class="view">
+
+        <div class="rest-topbar">
+            <div class="rt-head">
+                <button class="back-btn nav-back" data-target="home" aria-label="Back"><i class="fa-solid fa-chevron-left"></i></button>
+                <div class="rt-brand"><i class="fa-solid fa-utensils"></i><span>Khawa Dawa</span></div>
+                <div class="rt-spacer"></div>
+            </div>
+            <div class="cat-bar" id="cat-bar"></div>
+        </div>
+
+        <div class="rest-hero">
+            <div class="rest-logo" id="rest-logo"><i class="fa-solid fa-utensils"></i></div>
+            <div class="rest-meta">
+                <h3 id="rest-title">Restaurant Name</h3>
+                <p class="rest-addr"><i class="fa-solid fa-location-dot"></i> <span id="rest-address">Address not available</span></p>
+                <button class="map-toggle" id="btn-map-toggle"><i class="fa-solid fa-map"></i> View on map</button>
+            </div>
+            <div class="rest-actions">
+                <button class="icon-box" id="btn-fav" aria-label="Favorite"><i class="fa-regular fa-heart"></i></button>
+                <button class="icon-box" id="btn-share" aria-label="Share"><i class="fa-solid fa-share-nodes"></i></button>
+            </div>
+        </div>
+
+        <div id="rest-map-wrap"><div id="rest-map"></div></div>
+
+        <div class="quick-info">
+            <div class="qi-col">
+                <i class="fa-solid fa-star"></i>
+                <div class="qi-text"><strong id="rest-rating">4.0</strong><span id="rest-rating-count">No ratings yet</span></div>
+            </div>
+            <div class="qi-col" id="qi-location">
+                <i class="fa-solid fa-location-dot"></i>
+                <div class="qi-text"><strong>Location</strong><span>Tap to see map</span></div>
+            </div>
+        </div>
+
+        <div class="search-row">
+            <div class="search-box">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <input type="text" id="menu-search" placeholder="Search food in this restaurant">
+            </div>
+            <button class="filter-btn" id="btn-filter" aria-label="Filters"><i class="fa-solid fa-sliders"></i></button>
+        </div>
+
+        <div class="filter-panel" id="filter-panel">
+            <p>Food type</p>
+            <div class="chip-row" id="diet-chips">
+                <button class="chip active" data-diet="all">All</button>
+                <button class="chip" data-diet="veg">Veg</button>
+                <button class="chip" data-diet="nonveg">Non-Veg</button>
+            </div>
+            <p>Sort by price</p>
+            <div class="chip-row" id="sort-chips">
+                <button class="chip active" data-sort="none">Default</button>
+                <button class="chip" data-sort="low">Low to High</button>
+                <button class="chip" data-sort="high">High to Low</button>
+            </div>
+        </div>
+
+        <div id="menu-list"></div>
+    </div>
+
+    <!-- Cart View -->
+    <div id="cart-view" class="view">
+        <div class="section-title">Your Cart 🛒</div>
+        <div id="cart-items"></div>
+
+        <div class="cart-summary" id="cart-summary" style="display:none;">
+            <div class="bill-row"><span>Items Total</span><span id="bill-items">৳0</span></div>
+            <div class="bill-row"><span>Delivery Fee</span><span id="bill-delivery">Pending Location...</span></div>
+            <div class="bill-total"><span>Grand Total (COD)</span><span id="bill-total">৳0</span></div>
+
+            <p class="error-msg" id="delivery-error" style="margin-bottom:10px;"></p>
+
+            <button class="loc-btn" id="btn-capture-loc">
+                <i class="fa-solid fa-location-crosshairs"></i> Use Your Current Location
+            </button>
+            <input type="text" id="checkout-address" class="form-control" placeholder="Delivery Address / Captured Lat Lng" readonly>
+            <input type="hidden" id="checkout-lat">
+            <input type="hidden" id="checkout-lng">
+
+            <button class="btn btn-primary" id="btn-place-order" disabled>Place Order (Cash on Delivery)</button>
+        </div>
+        <div id="empty-cart-msg" style="text-align: center; padding: 50px 20px; color: var(--text-muted);">
+            <i class="fa-solid fa-cart-shopping" style="font-size: 50px; margin-bottom: 15px; color: #ddd;"></i>
+            <p>Your cart is empty.</p>
+        </div>
+    </div>
+
+    <!-- Orders View -->
+    <div id="orders-view" class="view">
+        <div class="section-title">Order History 📦</div>
+        <div id="orders-list"></div>
+    </div>
+
+    <!-- Order Track View -->
+    <div id="track-view" class="view">
+        <div class="header" style="box-shadow: none;">
+            <i class="fa-solid fa-arrow-left nav-back" data-target="orders" style="font-size: 20px; cursor: pointer;"></i>
+            <h2 style="flex:1; text-align:center; font-size: 18px;">Track Order</h2>
+            <div style="width: 20px;"></div>
+        </div>
+        <div style="padding: 20px;">
+            <h3 style="text-align: center; color: var(--primary);" id="track-status">Status</h3>
+            <p style="text-align: center; font-size: 14px; color: var(--text-muted); margin-bottom: 20px;" id="track-id"></p>
+
+            <div id="delivery-boy-info" style="background: var(--white); padding: 15px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; display: none;">
+                <h4>Delivery Partner</h4>
+                <p id="dboy-name">Name: Loading...</p>
+                <p id="dboy-phone">Phone: Loading...</p>
+                <p id="dboy-vehicle">Vehicle: Loading...</p>
+            </div>
+
+            <div style="border: 1px solid #ddd; border-radius: 8px; overflow: hidden; display: none;" id="chat-section">
+                <div style="background: var(--dark); color: #fff; padding: 10px; text-align: center; font-weight: bold;">Live Chat with Delivery Boy</div>
+                <div id="chat-messages"></div>
+                <div class="chat-input" style="display:flex; border-top:1px solid #ddd;">
+                    <input type="text" id="chat-input-msg" placeholder="Type a message..." style="flex:1; border:none; padding:12px; outline:none;">
+                    <button id="btn-send-chat" style="border:none; background:var(--primary); color:#fff; padding:0 20px; cursor:pointer;"><i class="fa-solid fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Profile View -->
+    <div id="profile-view" class="view">
+        <div class="section-title">Profile 👤</div>
+        <div style="padding: 20px;">
+            <input type="text" id="prof-name" class="form-control" placeholder="Full Name">
+            <input type="tel" id="prof-phone" class="form-control" placeholder="Phone Number">
+            <textarea id="prof-address" class="form-control" rows="3" placeholder="Default Address"></textarea>
+            <button class="btn btn-outline" id="btn-save-profile" style="margin-bottom: 15px;">Update Profile</button>
+            <button class="btn" style="background: var(--dark); color: #fff;" id="btn-logout">Logout</button>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <div class="bottom-nav" id="bottom-nav" style="display: none;">
+        <div class="nav-item b-nav-btn active" data-target="home"><i class="fa-solid fa-house"></i> Home</div>
+        <div class="nav-item b-nav-btn" data-target="cart"><i class="fa-solid fa-cart-shopping"></i> Cart<span class="cart-badge" id="cart-badge">0</span></div>
+        <div class="nav-item b-nav-btn" data-target="orders"><i class="fa-solid fa-clipboard-list"></i> Orders</div>
+        <div class="nav-item b-nav-btn" data-target="profile"><i class="fa-solid fa-user"></i> Profile</div>
+    </div>
+
+</div>
+
+<!-- Firebase v9+ Modular SDK -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import {
+        getAuth,
+        onAuthStateChanged,
+        createUserWithEmailAndPassword,
+        signInWithEmailAndPassword,
+        signOut,
+        setPersistence,
+        browserLocalPersistence,
+        sendPasswordResetEmail
+    } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+    import { getDatabase, ref, onValue, get, push, set, update, remove, onChildAdded, off } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+    const firebaseConfig = {
+  apiKey: "AIzaSyCOce9M1Kja8qV2yaBqAR9bmqjrwZdCcZ8",
+  authDomain: "khawa-dawa-9e3fc.firebaseapp.com",
+  databaseURL: "https://khawa-dawa-9e3fc-default-rtdb.firebaseio.com",
+  projectId: "khawa-dawa-9e3fc",
+  storageBucket: "khawa-dawa-9e3fc.firebasestorage.app",
+  messagingSenderId: "1066330282328",
+  appId: "1:1066330282328:web:588621f63e2d686b76ad2d"
+};
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getDatabase(app);
+
+    // Global State
+    let currentUser = null;
+    let cart = [];
+    let allMenus = [];
+    let deliveryConfig = { baseFee: 30, baseDistance: 1.5, perKmRate: 10, maxRadius: 6, nightSurge: 1.2 };
+    let calculatedDeliveryFee = 0;
+    let currentTrackOrderId = null;
+    let chatListenerRef = null;
+    let initializedUid = null;
+
+    // Toast helper
+    const toast = document.getElementById('toast');
+    let toastTimer;
+    function showToast(message, type = 'success') {
+        toast.innerText = message;
+        toast.className = type;
+        toast.style.display = 'block';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { toast.style.display = 'none'; }, 4000);
+    }
+
+    // Safe text helper for HTML
+    const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+    // Fetch Global Delivery Settings
+    onValue(ref(db, 'settings/delivery'), snap => {
+        if (snap.exists()) deliveryConfig = snap.val();
+    });
+
+    onAuthStateChanged(auth, user => {
+        if (user) {
+            currentUser = user;
+            document.getElementById('splash-screen').style.display = 'none';
+            document.getElementById('app-header').style.display = 'flex';
+            document.getElementById('bottom-nav').style.display = 'flex';
+            
+            if (initializedUid !== user.uid) {
+                initializedUid = user.uid;
+                loadProfile();
+                loadHomeData();
+                loadOrders();
+            }
+            switchTab('home');
+        } else {
+            currentUser = null;
+            initializedUid = null;
+            document.getElementById('splash-screen').style.display = 'none';
+            document.getElementById('app-header').style.display = 'none';
+            document.getElementById('bottom-nav').style.display = 'none';
+            switchTab('auth');
+        }
+    });
+
+    // Auth Toggles & Forms
+    document.getElementById('btn-to-signup').onclick = () => { document.getElementById('login-form').style.display = 'none'; document.getElementById('signup-form').style.display = 'block'; };
+    document.getElementById('btn-to-login').onclick = () => { document.getElementById('login-form').style.display = 'block'; document.getElementById('signup-form').style.display = 'none'; };
+
+    // Register User
+    document.getElementById('btn-signup').onclick = async () => {
+        const name = document.getElementById('signup-name').value;
+        const email = document.getElementById('signup-email').value;
+        const phone = document.getElementById('signup-phone').value;
+        const pass = document.getElementById('signup-password').value;
+        const err = document.getElementById('signup-error');
+
+        if (!name || !email || !phone || !pass) { err.innerText = "Fill all fields"; err.style.display = 'block'; return; }
+
+        try {
+            await setPersistence(auth, browserLocalPersistence);
+            const cred = await createUserWithEmailAndPassword(auth, email, pass);
+            await set(ref(db, 'customers/' + cred.user.uid), { name, email, phone, address: '', lat: '', lng: '' });
+        } catch (error) { err.innerText = error.message; err.style.display = 'block'; }
+    };
+
+    // Login User
+    const loginBtn = document.getElementById('btn-login');
+    async function handleLogin() {
+        const email = document.getElementById('login-email').value.trim();
+        const pass = document.getElementById('login-password').value;
+        const err = document.getElementById('login-error');
+        err.style.display = 'none';
+
+        if (!email || !pass) { err.innerText = "Please enter email and password."; err.style.display = 'block'; return; }
+
+        loginBtn.disabled = true;
+        try {
+            await setPersistence(auth, browserLocalPersistence);
+            await signInWithEmailAndPassword(auth, email, pass);
+        } catch (error) {
+            err.innerText = "Invalid credentials. Please try again."; 
+            err.style.display = 'block';
+        } finally {
+            loginBtn.disabled = false;
+        }
+    }
+    loginBtn.onclick = handleLogin;
+    document.getElementById('login-password').addEventListener('keydown', e => { if (e.key === 'Enter') handleLogin(); });
+
+    // Forgot Password Logic
+    const forgotModal = document.getElementById('forgot-modal');
+    const resetEmailInput = document.getElementById('reset-email');
+    const resetMsg = document.getElementById('reset-msg');
+    const resetSendBtn = document.getElementById('reset-send-btn');
+
+    document.getElementById('forgot-password-link').onclick = () => {
+        resetEmailInput.value = document.getElementById('login-email').value.trim();
+        resetMsg.className = 'modal-msg'; resetMsg.innerText = '';
+        forgotModal.classList.add('show');
+        resetEmailInput.focus();
+    }
+    document.getElementById('reset-cancel-btn').onclick = () => forgotModal.classList.remove('show');
+    forgotModal.addEventListener('click', e => { if (e.target === forgotModal) forgotModal.classList.remove('show'); });
+
+    resetSendBtn.onclick = async () => {
+        const email = resetEmailInput.value.trim();
+        if (!email) { resetMsg.className = 'modal-msg error'; resetMsg.innerText = "Please enter your email."; return; }
+        resetSendBtn.disabled = true; resetMsg.className = 'modal-msg'; resetMsg.innerText = '';
+        try {
+            await sendPasswordResetEmail(auth, email);
+            resetMsg.className = 'modal-msg success';
+            resetMsg.innerText = "Reset link sent! Check your inbox.";
+            showToast("Reset link sent!", 'success');
+            setTimeout(() => forgotModal.classList.remove('show'), 2000);
+        } catch (error) {
+            resetMsg.className = 'modal-msg error'; resetMsg.innerText = "Error sending reset email.";
+        } finally { resetSendBtn.disabled = false; }
+    };
+
+    // Logout
+    document.getElementById('btn-logout').onclick = () => signOut(auth).then(() => location.reload());
+
+    // --- Navigation ---
+    window.switchTab = function(tabId) {
+        document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+        document.getElementById(tabId + '-view').classList.add('active');
+        if (currentUser) document.getElementById('app-header').style.display = (tabId === 'restaurant') ? 'none' : 'flex';
+        document.querySelectorAll('.b-nav-btn').forEach(n => n.classList.remove('active'));
+        const activeNav = document.querySelector(`.b-nav-btn[data-target="${tabId}"]`);
+        if (activeNav) activeNav.classList.add('active');
+        if (tabId === 'cart') renderCart();
+    }
+    document.querySelectorAll('.b-nav-btn, .nav-back').forEach(btn => {
+        btn.addEventListener('click', (e) => switchTab(e.currentTarget.dataset.target));
+    });
+
+    // --- Home Data ---
+    function loadHomeData() {
+        onValue(ref(db, 'restaurants'), snap => {
+            let html = '';
+            allMenus = [];
+            let menuPromises = [];
+
+            snap.forEach(child => {
+                let r = child.val();
+                if (r.approved) {
+                    let logoHtml = r.logoUrl 
+                        ? `<img src="${esc(r.logoUrl)}" alt="Logo" class="rest-logo-thumb">`
+                        : `<div class="rest-logo-thumb"><i class="fa-solid fa-utensils"></i></div>`;
+
+                    html += `<div class="rest-card" data-id="${child.key}" data-name="${esc(r.name)}">
+                                <div style="display:flex; align-items:center; gap:15px;">
+                                    ${logoHtml}
+                                    <div>
+                                        <h4 style="color:var(--text-dark); margin-bottom:2px;">${esc(r.name)}</h4>
+                                        <p style="font-size:12px; color:var(--text-muted);">${esc(r.cuisine || 'Multi-Cuisine')}</p>
+                                    </div>
+                                </div>
+                                <i class="fa-solid fa-chevron-right" style="color:var(--text-muted)"></i>
+                             </div>`;
+
+                    menuPromises.push(get(ref(db, `menus/${child.key}`)).then(mSnap => {
+                        mSnap.forEach(mChild => {
+                            let item = mChild.val();
+                            item.id = mChild.key; item.restaurantId = child.key; item.restaurantName = r.name;
+                            allMenus.push(item);
+                        });
+                    }));
+                }
+            });
+            document.getElementById('restaurant-list').innerHTML = html;
+            document.querySelectorAll('.rest-card').forEach(card => card.onclick = () => window.openRestaurant(card.dataset.id, card.dataset.name));
+
+            Promise.all(menuPromises).then(renderSliders);
+        });
+    }
+
+    function renderSliders() {
+        const createCard = (m) => `<div class="food-card" data-rid="${esc(m.restaurantId)}" data-rname="${esc(m.restaurantName)}">
+            <img src="${esc(m.imageUrl || 'https://via.placeholder.com/150?text=Food')}" alt="Food" loading="lazy">
+            <div class="food-info">
+                <h4>${esc(m.name)}</h4>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span class="price">৳${m.price}</span>
+                    <span style="font-size:11px; color:var(--text-muted);">⭐ ${m.rating || '4.0'}</span>
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); margin-top:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                    <i class="fa-solid fa-store" style="color:var(--primary);"></i> ${esc(m.restaurantName)}
+                </div>
+            </div>
+        </div>`;
+
+        document.getElementById('slider-recommended').innerHTML = allMenus.filter(m => m.isRecommended && m.available !== false).slice(0,10).map(createCard).join('') || '<p style="color:var(--text-muted); font-size:13px;">No items</p>';
+        document.getElementById('slider-toprated').innerHTML = allMenus.filter(m => m.available !== false).sort((a,b) => (b.rating||0) - (a.rating||0)).slice(0,10).map(createCard).join('') || '<p style="color:var(--text-muted); font-size:13px;">No items</p>';
+
+        document.querySelectorAll('.food-card').forEach(card => {
+            card.onclick = () => window.openRestaurant(card.dataset.rid, card.dataset.rname);
+        });
+    }
+
+    // =====================================================================
+    //  RESTAURANT DETAILS / FOOD CART PAGE
+    // =====================================================================
+    const CATEGORIES = ['All', 'Biriyani and Drinks', 'Fast Food', 'Street Food', 'Others'];
+    const restState = { rid: null, name: '', data: {}, items: [], wish: {}, fav: false, category: 'All', query: '', diet: 'all', sort: 'none', map: null };
+
+    function itemCategory(item) { return CATEGORIES.includes(item.category) ? item.category : 'Others'; }
+
+    function renderCategoryBar() {
+        document.getElementById('cat-bar').innerHTML = CATEGORIES.map(c =>
+            `<button class="cat-pill ${c === restState.category ? 'active' : ''}" data-cat="${esc(c)}">${esc(c)}</button>`
+        ).join('');
+    }
+
+    function renderProducts() {
+        let list = restState.items.filter(i => i.available !== false);
+        if (restState.category !== 'All') list = list.filter(i => itemCategory(i) === restState.category);
+        if (restState.diet === 'veg') list = list.filter(i => i.isVeg === true);
+        if (restState.diet === 'nonveg') list = list.filter(i => i.isVeg === false);
+        if (restState.query) {
+            const q = restState.query.toLowerCase();
+            list = list.filter(i => (i.name || '').toLowerCase().includes(q) || (i.description || '').toLowerCase().includes(q));
+        }
+        if (restState.sort === 'low') list.sort((a, b) => a.price - b.price);
+        if (restState.sort === 'high') list.sort((a, b) => b.price - a.price);
+
+        document.getElementById('menu-list').innerHTML = list.map(i => {
+            const diet = i.isVeg === true ? '<span class="diet veg"></span><span class="diet-label">Veg</span>' : i.isVeg === false ? '<span class="diet nonveg"></span><span class="diet-label">Non-Veg</span>' : '';
+            const wished = restState.wish[i.id] ? 'active' : '';
+            return `<div class="p-card">
+                <div class="p-img">
+                    <img src="${esc(i.imageUrl || 'https://via.placeholder.com/150?text=Food')}" alt="${esc(i.name)}" loading="lazy">
+                    <button class="wish-btn ${wished}" data-wish="${esc(i.id)}" aria-label="Wishlist"><i class="${wished ? 'fa-solid' : 'fa-regular'} fa-heart"></i></button>
+                </div>
+                <div class="p-info">
+                    <h4>${esc(i.name)}</h4>
+                    ${i.description ? `<p class="p-desc">${esc(i.description)}</p>` : ''}
+                    <div class="p-row">${diet}</div>
+                    <span class="p-price">৳${esc(i.price)}</span>
+                </div>
+                <button class="p-add" data-add="${esc(i.id)}" aria-label="Add to cart"><i class="fa-solid fa-plus"></i></button>
+            </div>`;
+        }).join('') || '<div class="p-empty">No food found for this filter.</div>';
+    }
+
+    function setFavUI() {
+        const btn = document.getElementById('btn-fav');
+        btn.classList.toggle('active', restState.fav);
+        btn.innerHTML = `<i class="${restState.fav ? 'fa-solid' : 'fa-regular'} fa-heart"></i>`;
+    }
+
+    function fillRestaurantInfo() {
+        const d = restState.data;
+        document.getElementById('rest-title').innerText = d.name || restState.name;
+        document.getElementById('rest-address').innerText = d.address || 'Location on map';
+        document.getElementById('rest-logo').innerHTML = d.logoUrl
+            ? `<img src="${esc(d.logoUrl)}" alt="Logo">`
+            : '<i class="fa-solid fa-utensils"></i>';
+        document.getElementById('rest-rating').innerText = d.rating ? Number(d.rating).toFixed(1) : '4.0';
+        document.getElementById('rest-rating-count').innerText = d.ratingCount ? `${d.ratingCount} ratings` : '0 ratings';
+    }
+
+    window.openRestaurant = async function(rId, rName) {
+        Object.assign(restState, { rid: rId, name: rName, data: { name: rName }, items: [], wish: {}, fav: false, category: 'All', query: '', diet: 'all', sort: 'none' });
+        if (restState.map) { restState.map.remove(); restState.map = null; }
+        document.getElementById('rest-map-wrap').style.display = 'none';
+        document.getElementById('menu-search').value = '';
+        document.getElementById('filter-panel').classList.remove('show');
+        document.getElementById('btn-filter').classList.remove('active');
+        document.querySelectorAll('#diet-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.diet === 'all'));
+        document.querySelectorAll('#sort-chips .chip').forEach(c => c.classList.toggle('active', c.dataset.sort === 'none'));
+        document.getElementById('restaurant-view').scrollTop = 0;
+
+        renderCategoryBar();
+        fillRestaurantInfo();
+        setFavUI();
+        document.getElementById('menu-list').innerHTML = '<div class="p-empty">Loading menu...</div>';
+        switchTab('restaurant');
+
+        try {
+            const uid = currentUser.uid;
+            const [rSnap, mSnap, wSnap, fSnap] = await Promise.all([
+                get(ref(db, `restaurants/${rId}`)),
+                get(ref(db, `menus/${rId}`)),
+                get(ref(db, `customers/${uid}/wishlist`)).catch(() => null),
+                get(ref(db, `customers/${uid}/favorites/${rId}`)).catch(() => null)
+            ]);
+            if (restState.rid !== rId) return; 
+            restState.data = rSnap.val() || { name: rName };
+            restState.wish = (wSnap && wSnap.val()) || {};
+            restState.fav = !!(fSnap && fSnap.exists());
+            mSnap.forEach(child => { restState.items.push({ ...child.val(), id: child.key }); });
+            fillRestaurantInfo();
+            setFavUI();
+            renderProducts();
+        } catch (e) {
+            document.getElementById('menu-list').innerHTML = '<div class="p-empty">Could not load the menu. Please try again.</div>';
+        }
+    }
+
+    function toggleMap() {
+        const wrap = document.getElementById('rest-map-wrap');
+        const open = wrap.style.display === 'block';
+        wrap.style.display = open ? 'none' : 'block';
+        document.getElementById('btn-map-toggle').innerHTML = open
+            ? '<i class="fa-solid fa-map"></i> View on map' : '<i class="fa-solid fa-map"></i> Hide map';
+        if (open) return;
+
+        const lat = parseFloat(restState.data.lat), lng = parseFloat(restState.data.lng);
+        if (isNaN(lat) || isNaN(lng)) {
+            wrap.innerHTML = '<div class="map-empty">Restaurant location not pinned yet.</div>'; return;
+        }
+        if (!document.getElementById('rest-map')) wrap.innerHTML = '<div id="rest-map"></div>';
+        if (!restState.map) {
+            restState.map = L.map('rest-map').setView([lat, lng], 16);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(restState.map);
+            L.marker([lat, lng]).addTo(restState.map).bindPopup(esc(restState.data.name || restState.name)).openPopup();
+        }
+        setTimeout(() => restState.map.invalidateSize(), 100);
+    }
+    document.getElementById('btn-map-toggle').onclick = toggleMap;
+    document.getElementById('qi-location').onclick = toggleMap;
+
+    document.getElementById('btn-fav').onclick = async () => {
+        restState.fav = !restState.fav;
+        setFavUI();
+        try {
+            const favRef = ref(db, `customers/${currentUser.uid}/favorites/${restState.rid}`);
+            if (restState.fav) await set(favRef, true); else await remove(favRef);
+        } catch (e) {}
+    };
+
+    document.getElementById('btn-share').onclick = async () => {
+        const text = `Order from ${restState.data.name || restState.name} on Khawa Dawa`;
+        try {
+            if (navigator.share) await navigator.share({ title: 'Khawa Dawa', text, url: location.href });
+            else { await navigator.clipboard.writeText(`${text} - ${location.href}`); showToast('Link copied!'); }
+        } catch (e) {}
+    };
+
+    document.getElementById('cat-bar').addEventListener('click', e => {
+        const pill = e.target.closest('.cat-pill');
+        if (!pill) return; restState.category = pill.dataset.cat;
+        renderCategoryBar(); renderProducts();
+    });
+
+    document.getElementById('menu-search').addEventListener('input', e => { restState.query = e.target.value.trim(); renderProducts(); });
+    document.getElementById('btn-filter').onclick = e => {
+        const panel = document.getElementById('filter-panel');
+        panel.classList.toggle('show');
+        e.currentTarget.classList.toggle('active', panel.classList.contains('show'));
+    };
+    document.getElementById('diet-chips').addEventListener('click', e => {
+        const chip = e.target.closest('.chip'); if (!chip) return;
+        restState.diet = chip.dataset.diet;
+        document.querySelectorAll('#diet-chips .chip').forEach(c => c.classList.toggle('active', c === chip));
+        renderProducts();
+    });
+    document.getElementById('sort-chips').addEventListener('click', e => {
+        const chip = e.target.closest('.chip'); if (!chip) return;
+        restState.sort = chip.dataset.sort;
+        document.querySelectorAll('#sort-chips .chip').forEach(c => c.classList.toggle('active', c === chip));
+        renderProducts();
+    });
+
+    document.getElementById('menu-list').addEventListener('click', async e => {
+        const addBtn = e.target.closest('[data-add]');
+        if (addBtn) {
+            const item = restState.items.find(i => i.id === addBtn.dataset.add);
+            if (item) addToCart(item.id, item.name, Number(item.price), restState.rid);
+            return;
+        }
+        const wishBtn = e.target.closest('[data-wish]');
+        if (wishBtn) {
+            const id = wishBtn.dataset.wish; const on = !restState.wish[id];
+            if (on) restState.wish[id] = true; else delete restState.wish[id];
+            wishBtn.classList.toggle('active', on);
+            wishBtn.innerHTML = `<i class="${on ? 'fa-solid' : 'fa-regular'} fa-heart"></i>`;
+            try {
+                const wRef = ref(db, `customers/${currentUser.uid}/wishlist/${id}`);
+                if (on) await set(wRef, true); else await remove(wRef);
+            } catch (err) {}
+        }
+    });
+
+    // --- Cart & Checkout ---
+    function addToCart(itemId, name, price, rId) {
+        if (cart.length > 0 && cart[0].restaurantId !== rId) return showToast("Clear cart before ordering from a different restaurant.", 'error');
+        let existing = cart.find(i => i.itemId === itemId);
+        if (existing) existing.qty++; else cart.push({ itemId, name, price, qty: 1, restaurantId: rId });
+
+        const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+        const badge = document.getElementById('cart-badge');
+        badge.style.display = totalQty > 0 ? 'block' : 'none';
+        badge.innerText = totalQty;
+        showToast(`${name} added to cart`);
+    }
+
+    function renderCart() {
+        if (cart.length === 0) {
+            document.getElementById('cart-items').innerHTML = '';
+            document.getElementById('cart-summary').style.display = 'none';
+            document.getElementById('empty-cart-msg').style.display = 'block';
+            return;
+        }
+
+        document.getElementById('empty-cart-msg').style.display = 'none';
+        document.getElementById('cart-summary').style.display = 'block';
+
+        let html = '';
+        let itemsTotal = 0;
+        cart.forEach((item, index) => {
+            itemsTotal += item.price * item.qty;
+            html += `<div class="cart-item">
+                        <div><h4>${esc(item.name)}</h4><p style="font-size:12px; color:var(--text-muted);">৳${item.price} x ${item.qty}</p></div>
+                        <div style="font-weight:bold; color:var(--primary);">৳${item.price * item.qty}</div>
+                        <button class="remove-cart" data-index="${index}" style="border:none; background:none; color:red; cursor:pointer;"><i class="fa-solid fa-trash"></i></button>
+                    </div>`;
+        });
+        document.getElementById('cart-items').innerHTML = html;
+        document.getElementById('bill-items').innerText = '৳' + itemsTotal;
+        document.getElementById('bill-total').innerText = '৳' + (itemsTotal + calculatedDeliveryFee);
+
+        document.querySelectorAll('.remove-cart').forEach(btn => {
+            btn.onclick = (e) => {
+                cart.splice(e.currentTarget.dataset.index, 1);
+                const totalQty = cart.reduce((sum, item) => sum + item.qty, 0);
+                const badge = document.getElementById('cart-badge');
+                badge.style.display = totalQty > 0 ? 'block' : 'none';
+                badge.innerText = totalQty;
+                renderCart();
+            };
+        });
+    }
+
+    document.getElementById('btn-capture-loc').onclick = async () => {
+    const btn = document.getElementById('btn-capture-loc');
+    btn.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i> Finding Location...`;
+
+    try {
+        // Capacitor Geolocation Plugin Call
+        const { Geolocation } = window.Capacitor.Plugins;
+        
+        // কাস্টমারের কাছ থেকে লোকেশন পারমিশন চাওয়া ও নেওয়া
+        await Geolocation.requestPermissions();
+        const position = await Geolocation.getCurrentPosition({ enableHighAccuracy: true });
+
+        btn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> Use Your Current Location`;
+        
+        const custLat = position.coords.latitude;
+        const custLng = position.coords.longitude;
+
+        document.getElementById('checkout-lat').value = custLat;
+        document.getElementById('checkout-lng').value = custLng;
+
+        // OpenStreetMap দিয়ে ঠিকানার নাম নেওয়া
+        try {
+            const geoRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${custLat}&lon=${custLng}`);
+            const geoData = await geoRes.json();
+            document.getElementById('checkout-address').value = geoData.display_name || `Lat: ${custLat.toFixed(4)}, Lng: ${custLng.toFixed(4)}`;
+        } catch (e) {
+            document.getElementById('checkout-address').value = `Lat: ${custLat.toFixed(4)}, Lng: ${custLng.toFixed(4)}`;
+        }
+
+        // রেস্তোরাঁর অবস্থান অনুযায়ী ডেলিভারি ফি হিসাব (মডেল-২)
+        const rSnap = await get(ref(db, `restaurants/${cart[0].restaurantId}`));
+        const restData = rSnap.val();
+        
+        // যদি রেস্তোরাঁর Lat/Lng না থাকে তবে কাস্টমারের কাছাকাছি ধরে নেবে
+        const restLat = restData.lat || custLat;
+        const restLng = restData.lng || custLng;
+
+        // কাস্টমার ও রেস্তোরাঁর মধ্যে দূরত্ব (কিলোমিটারে)
+        const distMeters = L.latLng(custLat, custLng).distanceTo(L.latLng(restLat, restLng));
+        const distKm = distMeters / 1000;
+
+        const errBox = document.getElementById('delivery-error');
+        const placeBtn = document.getElementById('btn-place-order');
+
+        // সর্বোচ্চ ১০ কিমি পর্যন্ত ডেলিভারি এলাউড
+        if (distKm > 10) {
+            errBox.innerText = `Out of delivery range (${distKm.toFixed(1)} km). Max distance is 10 km.`;
+            errBox.style.display = 'block'; 
+            placeBtn.disabled = true; 
+            return;
+        }
+
+        // মডেল-২: প্রথম ২ কিমি পর্যন্ত ৩০ টাকা, এরপর প্রতি কিমি ১০ টাকা
+        let fee = 30; // Base Fee
+        if (distKm > 2.0) {
+            fee += Math.ceil((distKm - 2.0) * 10); // অতিরিক্ত কিমিতে ১০ টাকা
+        }
+
+        calculatedDeliveryFee = fee;
+        document.getElementById('bill-delivery').innerText = `৳${fee} (${distKm.toFixed(1)} km)`;
+        errBox.style.display = 'none'; 
+        placeBtn.disabled = false; 
+        renderCart();
+
+    } catch (err) {
+        btn.innerHTML = `<i class="fa-solid fa-location-crosshairs"></i> Use Your Current Location`;
+        alert("Location Error: Please enable GPS/Location access on your phone.");
+    }
+};
+    };
+
+    document.getElementById('btn-place-order').onclick = async () => {
+        const address = document.getElementById('checkout-address').value;
+        const lat = document.getElementById('checkout-lat').value;
+        const lng = document.getElementById('checkout-lng').value;
+
+        const snap = await get(ref(db, 'customers/' + currentUser.uid));
+        const customer = snap.val();
+        const itemsTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+
+        const orderData = {
+            customerUid: currentUser.uid, 
+            restaurantId: cart[0].restaurantId, 
+            items: cart,
+            itemsTotal: itemsTotal, 
+            deliveryFee: calculatedDeliveryFee, 
+            totalAmount: itemsTotal + calculatedDeliveryFee,
+            address: address, 
+            customerLat: lat, 
+            customerLng: lng, 
+            phone: customer.phone, 
+            status: 'Pending', // Setting status strictly to 'Pending'
+            createdAt: Date.now(), 
+            updatedAt: Date.now()
+        };
+
+        await push(ref(db, 'orders'), orderData);
+        alert("Order placed successfully (Cash on Delivery)!");
+        cart = []; calculatedDeliveryFee = 0; document.getElementById('btn-place-order').disabled = true;
+        document.getElementById('cart-badge').style.display = 'none';
+        switchTab('orders');
+    };
+
+    // --- Orders & Tracking ---
+    function loadOrders() {
+        onValue(ref(db, 'orders'), snap => {
+            let html = ''; let orders = [];
+            snap.forEach(child => { if (child.val().customerUid === currentUser.uid) orders.push({ id: child.key, ...child.val() }); });
+            orders.sort((a,b) => b.createdAt - a.createdAt);
+
+            orders.forEach(o => {
+                let badgeClass = (o.status==='Pending'||o.status==='PLACED'||o.status==='DELIVERED'||o.status==='CANCELLED') ? (o.status==='DELIVERED'?'delivered':(o.status==='CANCELLED'?'':'placed')) : 'active';
+                html += `<div class="order-card">
+                            <div class="order-header"><span style="font-size:12px; color:var(--text-muted);">${new Date(o.createdAt).toLocaleString()}</span><span class="badge ${badgeClass}">${o.status}</span></div>
+                            <div style="display:flex; justify-content:space-between; margin-bottom:10px;"><strong>Total:</strong> <span>৳${o.totalAmount}</span></div>
+                            ${(o.status !== 'DELIVERED' && o.status !== 'CANCELLED') ?
+                              `<button class="track-btn" onclick="window.trackOrder('${o.id}')">Track Order</button>` : ''}
+                        </div>`;
+            });
+            document.getElementById('orders-list').innerHTML = html || '<p style="text-align:center; padding:20px;">No orders found.</p>';
+        });
+    }
+
+    window.trackOrder = (orderId) => {
+        currentTrackOrderId = orderId;
+        switchTab('track');
+        document.getElementById('track-id').innerText = "Order ID: " + orderId;
+
+        onValue(ref(db, 'orders/' + orderId), async snap => {
+            let order = snap.val();
+            document.getElementById('track-status').innerText = order.status;
+            if (order.deliveryUid) {
+                document.getElementById('delivery-boy-info').style.display = 'block';
+                document.getElementById('chat-section').style.display = 'block';
+                let dSnap = await get(ref(db, 'deliveryPartners/' + order.deliveryUid));
+                let dBoy = dSnap.val();
+                document.getElementById('dboy-name').innerText = "Name: " + dBoy.name;
+                document.getElementById('dboy-phone').innerText = "Phone: " + dBoy.phone;
+                document.getElementById('dboy-vehicle').innerText = "Vehicle: " + dBoy.vehicle;
+            }
+        });
+
+        if (chatListenerRef) off(chatListenerRef);
+        document.getElementById('chat-messages').innerHTML = '';
+        chatListenerRef = ref(db, 'chats/' + orderId);
+        onChildAdded(chatListenerRef, snap => {
+            let msg = snap.val();
+            let div = document.createElement('div');
+            div.className = 'msg ' + (msg.senderRole === 'customer' ? 'me' : 'other');
+            div.innerText = msg.message;
+            let cb = document.getElementById('chat-messages'); cb.appendChild(div); cb.scrollTop = cb.scrollHeight;
+        });
+    };
+
+    document.getElementById('btn-send-chat').onclick = () => {
+        const input = document.getElementById('chat-input-msg');
+        if (!input.value.trim() || !currentTrackOrderId) return;
+        push(ref(db, 'chats/' + currentTrackOrderId), { senderUid: currentUser.uid, senderRole: 'customer', message: input.value.trim(), timestamp: Date.now() });
+        input.value = '';
+    };
+
+    // --- Profile ---
+    function loadProfile() {
+        onValue(ref(db, 'customers/' + currentUser.uid), snap => {
+            let data = snap.val();
+            if (data) {
+                document.getElementById('prof-name').value = data.name || '';
+                document.getElementById('prof-phone').value = data.phone || '';
+                document.getElementById('prof-address').value = data.address || '';
+            }
+        });
+    }
+
+    document.getElementById('btn-save-profile').onclick = () => {
+        update(ref(db, 'customers/' + currentUser.uid), {
+            name: document.getElementById('prof-name').value,
+            phone: document.getElementById('prof-phone').value,
+            address: document.getElementById('prof-address').value
+        }).then(() => showToast("Profile Updated!"));
+    };
+</script>
+</body>
+</html>
